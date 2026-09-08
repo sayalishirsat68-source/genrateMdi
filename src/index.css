@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+@theme {
+  --font-headline-xl: "Inter", sans-serif;
+  --font-headline-lg: "Inter", sans-serif;
+  --font-headline-md: "Inter", sans-serif;
+  --font-headline-sm: "Inter", sans-serif;
+  --font-body-lg: "Inter", sans-serif;
+  --font-body-md: "Inter", sans-serif;
+  --font-body-sm: "Inter", sans-serif;
+  --font-label-md: "Inter", sans-serif;
+  --font-label-sm: "Inter", sans-serif;
+  --font-code-sm: "JetBrains Mono", monospace;
+  --font-code-xs: "JetBrains Mono", monospace;
+
+  --color-surface: #f8f9ff;
+  --color-surface-dim: #cbdbf5;
+  --color-surface-bright: #f8f9ff;
+  --color-surface-canvas: #f8fafc;
+  --color-surface-subtle: #f1f5f9;
+  --color-surface-card: #ffffff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #eff4ff;
+  --color-surface-container: #e5eeff;
+  --color-surface-container-high: #dce9ff;
+  --color-surface-container-highest: #d3e4fe;
+  --color-on-surface: #0b1c30;
+  --color-on-surface-variant: #45464d;
+  --color-inverse-surface: #213145;
+  --color-inverse-on-surface: #eaf1ff;
+  --color-primary: #000000;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #131b2e;
+  --color-on-primary-container: #7c839b;
+  --color-primary-fixed: #dae2fd;
+  --color-primary-fixed-dim: #bec6e0;
+  --color-secondary: #006a61;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #86f2e4;
+  --color-on-secondary-container: #006f66;
+  --color-border-crisp: #e2e8f0;
+  --color-border-strong: #cbd5e1;
+  --color-status-verified: #059669;
+  --color-status-verified-bg: #ecfdf5;
+  --color-status-verified-border: #a7f3d0;
+  --color-status-pending: #d97706;
+  --color-status-pending-bg: #fffbeb;
+  --color-status-pending-border: #fde68a;
+  --color-status-critical: #e11d48;
+  --color-status-critical-bg: #fff1f2;
+  --color-status-critical-border: #fecdd3;
+  --color-status-isolated: #6366f1;
+  --color-status-isolated-bg: #eef2ff;
+  --color-status-isolated-border: #c7d2fe;
+  --color-brand-accent-cyan: #06b6d4;
+
+  --spacing-space-2xs: 0.125rem;
+  --spacing-space-xs: 0.25rem;
+  --spacing-space-sm: 0.5rem;
+  --spacing-space-md: 0.75rem;
+  --spacing-space-lg: 1rem;
+  --spacing-space-xl: 1.5rem;
+  --spacing-space-2xl: 2rem;
+  --spacing-space-3xl: 3rem;
+}
+
+@layer base {
+  html, body {
+    width: 100vw;
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: var(--color-surface);
+    color: var(--color-on-surface);
+  }
+
+  body {
+    overscroll-behavior: none;
+  }
+
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+

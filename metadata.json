@@ -1,0 +1,6 @@
+{
+  "name": "genraticMed - Rx Vault",
+  "description": "Clinical operations precision portal for bio-generic prescription tracking, pharmacokinetic parity validation, and real-time refills.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
