@@ -1,8 +1,8 @@
 import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
-import { INITIAL_PRESCRIPTIONS, VITALS_DATA } from './src/data/mockData';
-import type { Prescription } from './src/types';
+import { INITIAL_PRESCRIPTIONS, VITALS_DATA } from './data/mockData.js';
+import type { Prescription } from './types.js';
 
 dotenv.config();
 
@@ -49,9 +49,10 @@ function telemetrySnapshot(order: DroneOrder, tick: number) {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// CORS headers for local Vite dev server
+// CORS headers — allow the Vite dev server and any configured frontend origin
+const allowedOrigin = process.env.FRONTEND_URL || '*';
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Origin', allowedOrigin);
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   if (req.method === 'OPTIONS') {
@@ -119,7 +120,16 @@ app.get('/api/v1/fhir/MedicationRequest/:id', (req: Request, res: Response) => {
     res.status(404).json({ success: false, error: 'Prescription not found.' });
     return;
   }
-  res.json({ resourceType: 'MedicationRequest', id: prescription.id, status: prescription.status === 'completed' ? 'completed' : 'active', intent: 'order', subject: { reference: 'Patient/patient-robert-c' }, medicationCodeableConcept: { text: prescription.name }, dosageInstruction: [{ text: prescription.instructions, doseAndRate: [{ doseQuantity: { text: prescription.dosage } }] },], authoredOn: new Date().toISOString().slice(0, 10) });
+  res.json({
+    resourceType: 'MedicationRequest',
+    id: prescription.id,
+    status: prescription.status === 'completed' ? 'completed' : 'active',
+    intent: 'order',
+    subject: { reference: 'Patient/patient-robert-c' },
+    medicationCodeableConcept: { text: prescription.name },
+    dosageInstruction: [{ text: prescription.instructions, doseAndRate: [{ doseQuantity: { text: prescription.dosage } }] }],
+    authoredOn: new Date().toISOString().slice(0, 10),
+  });
 });
 
 app.get('/api/v1/fhir/Observation/:patientId', (req: Request, res: Response) => {
@@ -127,7 +137,21 @@ app.get('/api/v1/fhir/Observation/:patientId', (req: Request, res: Response) => 
     res.status(404).json({ success: false, error: 'Patient not found.' });
     return;
   }
-  res.json({ resourceType: 'Bundle', type: 'collection', entry: VITALS_DATA.map((vital, index) => ({ resource: { resourceType: 'Observation', id: `vital-${index + 1}`, status: 'final', subject: { reference: 'Patient/patient-robert-c' }, code: { text: vital.title }, valueQuantity: { value: vital.currentValue, unit: vital.unit }, effectiveDateTime: new Date().toISOString() } })) });
+  res.json({
+    resourceType: 'Bundle',
+    type: 'collection',
+    entry: VITALS_DATA.map((vital, index) => ({
+      resource: {
+        resourceType: 'Observation',
+        id: `vital-${index + 1}`,
+        status: 'final',
+        subject: { reference: 'Patient/patient-robert-c' },
+        code: { text: vital.title },
+        valueQuantity: { value: vital.currentValue, unit: vital.unit },
+        effectiveDateTime: new Date().toISOString(),
+      },
+    })),
+  });
 });
 
 app.post('/api/v1/abdm/consent-requests', (req: Request, res: Response) => {
@@ -136,12 +160,23 @@ app.post('/api/v1/abdm/consent-requests', (req: Request, res: Response) => {
     res.status(400).json({ success: false, error: 'purpose and records are required for consent.' });
     return;
   }
-  // A live ABDM request is enabled only when deployment supplies gateway credentials.
-  res.status(202).json({ success: true, mode: process.env.ABDM_GATEWAY_URL ? 'sandbox-ready' : 'local-consent-preview', data: { consentId: `CONSENT-${Date.now()}`, purpose, records, status: 'requested', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() } });
+  res.status(202).json({
+    success: true,
+    mode: process.env.ABDM_GATEWAY_URL ? 'sandbox-ready' : 'local-consent-preview',
+    data: {
+      consentId: `CONSENT-${Date.now()}`,
+      purpose,
+      records,
+      status: 'requested',
+      expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+    },
+  });
 });
 
 app.post('/api/v1/orders/drone-dispatch', (req: Request, res: Response) => {
-  const prescriptionIds = Array.isArray(req.body.prescriptionIds) ? req.body.prescriptionIds.filter((id: unknown): id is string => typeof id === 'string') : [];
+  const prescriptionIds = Array.isArray(req.body.prescriptionIds)
+    ? req.body.prescriptionIds.filter((id: unknown): id is string => typeof id === 'string')
+    : [];
   const distanceKm = Number(req.body.distanceKm);
   if (prescriptionIds.length === 0 || prescriptionIds.some((id) => !prescriptions.some((prescription) => prescription.id === id))) {
     res.status(400).json({ success: false, error: 'Dispatch requires one or more valid prescription IDs.' });
@@ -194,7 +229,15 @@ app.get('/api/v1/orders/:id/receipt', (req: Request, res: Response) => {
     res.status(404).json({ success: false, error: 'A receipt is available after delivery.' });
     return;
   }
-  res.json({ success: true, data: { receiptId: `RCT-${order.waybillId}`, waybillId: order.waybillId, verifiedCoA: true, deliveredAt: new Date().toISOString() } });
+  res.json({
+    success: true,
+    data: {
+      receiptId: `RCT-${order.waybillId}`,
+      waybillId: order.waybillId,
+      verifiedCoA: true,
+      deliveredAt: new Date().toISOString(),
+    },
+  });
 });
 
 // Clinical Formularies for Generic Equivalence Matching
@@ -284,7 +327,8 @@ const FORMULARY_DATABASE = [
 /**
  * POST /api/v1/ai/scan-prescription
  * Ingests an uploaded image of a prescription, lab report, or medicine blister pack.
- * Uses Gemini 2.0/2.5 Flash via @google/genai to extract clinical text and correlate with generic bio-parity.
+ * Uses Gemini 2.0 Flash via @google/genai to extract clinical text and correlate with
+ * generic bio-parity data.
  */
 app.post('/api/v1/ai/scan-prescription', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -305,13 +349,11 @@ app.post('/api/v1/ai/scan-prescription', async (req: Request, res: Response): Pr
 
     // Fast-path: If user specifically requested a sample benchmark
     if (sampleId) {
-      const matchedSample = FORMULARY_DATABASE.find((f) => f.brand.toLowerCase().includes(sampleId.toLowerCase()));
+      const matchedSample = FORMULARY_DATABASE.find((f) =>
+        f.brand.toLowerCase().includes((sampleId as string).toLowerCase())
+      );
       if (matchedSample) {
-        res.json({
-          success: true,
-          mode: 'sample_benchmark',
-          data: matchedSample,
-        });
+        res.json({ success: true, mode: 'sample_benchmark', data: matchedSample });
         return;
       }
     }
@@ -320,9 +362,9 @@ app.post('/api/v1/ai/scan-prescription', async (req: Request, res: Response): Pr
     if (hasValidKey && imageBase64) {
       try {
         const ai = new GoogleGenAI({ apiKey });
-        
+
         // Strip the browser data-URL prefix for either images or PDFs.
-        const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '');
+        const cleanBase64 = (imageBase64 as string).replace(/^data:[^;]+;base64,/, '');
 
         const prompt = `You are a clinical pharmacologist and bio-parity verification specialist for the genraticMed portal.
 Analyze this medical prescription image or drug packaging carefully.
@@ -353,66 +395,33 @@ Respond ONLY with a valid JSON object strictly matching this schema:
               role: 'user',
               parts: [
                 { text: prompt },
-                {
-                  inlineData: {
-                    mimeType: mimeType || 'image/jpeg',
-                    data: cleanBase64,
-                  },
-                },
+                { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64 } },
               ],
             },
           ],
         });
 
         const textOutput = response.text || '';
-        // Extract JSON string from potential markdown formatting
         const jsonMatch = textOutput.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
-          res.json({
-            success: true,
-            mode: 'gemini_multimodal_live',
-            data: parsed,
-          });
+          res.json({ success: true, mode: 'gemini_live', data: parsed });
           return;
         }
       } catch (geminiError) {
-        console.warn('Gemini API live extraction encountered a fallback condition:', geminiError);
-        // Fall through to resilient clinical formulary extraction
+        console.error('[server] Gemini API error, falling back to formulary:', geminiError);
       }
     }
 
-    // High-Fidelity Clinical Formulary Fallback (Guarantees reliable operation without API key)
-    const randomIndex = Math.floor(Math.random() * FORMULARY_DATABASE.length);
-    const simulatedExtract = FORMULARY_DATABASE[randomIndex];
-
-    // Add slight realistic variation
-    const responseData = {
-      ...simulatedExtract,
-      extractedAt: new Date().toISOString(),
-      verifiedUnder: 'CDSCO Schedule M & US FDA Orange Book',
-    };
-
-    res.json({
-      success: true,
-      mode: hasValidKey ? 'live_fallback' : 'clinical_formulary_mock',
-      data: responseData,
-    });
-  } catch (error: unknown) {
-    console.error('Error in scan-prescription endpoint:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Prescription ingestion pipeline encountered an error';
-    res.status(500).json({
-      success: false,
-      error: errorMessage,
-    });
+    // Server-side formulary fallback
+    const fallback = FORMULARY_DATABASE[Math.floor(Math.random() * FORMULARY_DATABASE.length)];
+    res.json({ success: true, mode: 'clinical_formulary_mock', data: fallback });
+  } catch (err) {
+    console.error('[server] scan-prescription error:', err);
+    res.status(500).json({ success: false, error: 'Internal server error.' });
   }
 });
 
-// Start Express server
-if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => {
-    console.log(`[genraticMed] Clinical API server active on http://localhost:${PORT}`);
-  });
-}
-
-export default app;
+app.listen(PORT, () => {
+  console.log(`[server] genraticMed API running on http://localhost:${PORT}`);
+});

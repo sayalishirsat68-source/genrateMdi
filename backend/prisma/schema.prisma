@@ -52,13 +52,13 @@ model Prescription {
 }
 
 model VitalMetric {
-  id        String   @id @default(cuid())
-  patientId String
-  title     String
-  value     Float
-  unit      String
+  id         String   @id @default(cuid())
+  patientId  String
+  title      String
+  value      Float
+  unit       String
   measuredAt DateTime @default(now())
-  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patient    Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
 }
 
 model ClinicalDocument {

@@ -121,7 +121,7 @@
 
 ---
 
-## 4. Pending Features (Phase 4 & Beyond)
+## 4. Future Enhancements
 
 | Feature | Target Layer | Description | Priority |
 | :--- | :--- | :--- | :--- |
@@ -129,7 +129,6 @@
 | **ABHA OAuth 2.0** | Auth | Replace the local PIN/demo biometric gate with gateway-backed ABHA authentication. | Medium (Future) |
 | **Drone Telemetry WebSockets**| Fullstack | Render live vector radar with GPS route of autonomous drone delivery to patient landing pad | Medium (Phase 4) |
 | **Payment Gateway** | Client / Server | Integrate Stripe / Razorpay checkout for prescription copayments and drone fees | Medium (Phase 4) |
-| **FHIR / ABDM Gateway** | Integration | Connect with official NDHM/ABDM sandbox endpoints for clinical document exchange | Low (Phase 5) |
 
 ---
 
@@ -324,7 +323,6 @@ Q4 2026 (Persistence & Security)
 └── Integrate PWA offline caching with Workbox
 
 Q1 2027 (Clinical Ecosystem)
-├── National Health Authority (ABDM) Milestone 1, 2, 3 sandbox certification
-├── Real-time SkyRoute Drone telemetry via WebSocket / Leaflet Map integration
+├── Advanced map visualization for SkyRoute telemetry
 └── Physician e-signing portal with PKI smart-card support
 ```

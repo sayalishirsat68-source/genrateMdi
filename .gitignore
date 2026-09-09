@@ -1,8 +1,30 @@
+# Dependencies
 node_modules/
-build/
+frontend/node_modules/
+backend/node_modules/
+
+# Build output
 dist/
-coverage/
-.DS_Store
-*.log
+build/
+frontend/dist/
+backend/dist/
+
+# Prisma generated client
+backend/node_modules/.prisma/
+
+# Environment files — copy the .env.example files and fill in your values
 .env*
 !.env.example
+!frontend/.env.example
+!backend/.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
