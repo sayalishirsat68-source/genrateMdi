@@ -74,3 +74,23 @@ export interface CartItem {
   supplyDays: number;
   refillScheduledDate: string;
 }
+
+export interface ExtractedPrescriptionData {
+  brand: string;
+  ingredient: string;
+  genericEquivalent: string;
+  brandCost: string;
+  genericCost: string;
+  savings: string;
+  confidence: string;
+  doctorName?: string;
+  doctorSpecialty?: string;
+  instructions?: string;
+  dosage?: string;
+  daysLeft?: number;
+  aucMatch?: string;
+  category?: string;
+  mode?: string;
+  extractedAt?: string;
+  verifiedUnder?: string;
+}

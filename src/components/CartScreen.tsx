@@ -1,10 +1,26 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Prescription } from '../types';
 
 interface CartScreenProps {
   items: Prescription[];
   onRemoveItem: (id: string) => void;
   onClearCart: () => void;
+}
+
+interface DroneOrder {
+  id: string;
+  waybillId: string;
+  deliveryFee: number;
+}
+
+interface Telemetry {
+  status: 'dispatched' | 'in_transit' | 'delivered';
+  progress: number;
+  etaMinutes: number;
+  altitudeM: number;
+  airspeedKph: number;
+  temperatureC: number;
+  humidityPercent: number;
 }
 
 export const CartScreen: React.FC<CartScreenProps> = ({
@@ -14,18 +30,59 @@ export const CartScreen: React.FC<CartScreenProps> = ({
 }) => {
   const [deliveryType, setDeliveryType] = useState<'drone' | 'express'>('drone');
   const [orderPlaced, setOrderPlaced] = useState(false);
+  const [droneOrder, setDroneOrder] = useState<DroneOrder | null>(null);
+  const [telemetry, setTelemetry] = useState<Telemetry | null>(null);
+  const [dispatchError, setDispatchError] = useState<string | null>(null);
+  const [receiptId, setReceiptId] = useState<string | null>(null);
 
   const subtotal = items.reduce((acc, item) => acc + item.directGenericPrice, 0);
   const brandSubtotal = items.reduce((acc, item) => acc + item.innovatorPrice, 0);
-  const deliveryFee = deliveryType === 'drone' ? 2.50 : 0.00;
+  const deliveryFee = deliveryType === 'drone' ? 3.69 : 0.00;
   const total = subtotal + deliveryFee;
   const totalSavings = brandSubtotal - subtotal;
 
-  const handleCheckout = () => {
-    setOrderPlaced(true);
-    setTimeout(() => {
-      onClearCart();
-    }, 4000);
+  useEffect(() => {
+    if (!droneOrder) return;
+    const stream = new EventSource(`/api/v1/orders/${droneOrder.id}/telemetry`);
+    stream.addEventListener('telemetry', (event) => {
+      const next = JSON.parse((event as MessageEvent<string>).data) as Telemetry;
+      setTelemetry(next);
+      if (next.status === 'delivered') {
+        stream.close();
+        onClearCart();
+      }
+    });
+    stream.onerror = () => stream.close();
+    return () => stream.close();
+  }, [droneOrder, onClearCart]);
+
+  const handleCheckout = async () => {
+    if (deliveryType === 'express') {
+      setOrderPlaced(true);
+      setTimeout(onClearCart, 1500);
+      return;
+    }
+    setDispatchError(null);
+    try {
+      const response = await fetch('/api/v1/orders/drone-dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prescriptionIds: items.map((item) => item.id), distanceKm: 8.4 }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.success) throw new Error(payload.error || 'Unable to create dispatch.');
+      setDroneOrder(payload.data as DroneOrder);
+      setOrderPlaced(true);
+    } catch (error) {
+      setDispatchError(error instanceof Error ? error.message : 'Unable to create dispatch.');
+    }
+  };
+
+  const downloadReceipt = async () => {
+    if (!droneOrder) return;
+    const response = await fetch(`/api/v1/orders/${droneOrder.id}/receipt`);
+    const payload = await response.json();
+    if (response.ok) setReceiptId(payload.data.receiptId);
   };
 
   return (
@@ -42,15 +99,25 @@ export const CartScreen: React.FC<CartScreenProps> = ({
           <div className="w-16 h-16 bg-status-verified text-white rounded-full flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
             <span className="material-symbols-outlined text-3xl">done_all</span>
           </div>
-          <h3 className="font-bold text-lg text-emerald-950">Dispatch Scheduled!</h3>
+          <h3 className="font-bold text-lg text-emerald-950">{telemetry?.status === 'delivered' ? 'Delivered & Verified' : 'Dispatch Scheduled!'}</h3>
           <p className="text-xs text-emerald-800 max-w-xs mx-auto">
-            Order #GM-REF-2026-99 is routed to SkyRoute Drone Hub. Authenticated cold-chain tracking is active.
+            {droneOrder ? 'SkyRoute telemetry and cold-chain monitoring are active.' : 'Express courier dispatch has been scheduled.'}
           </p>
           <div className="bg-white/80 p-3 rounded-xl text-left text-xs space-y-1 font-mono text-emerald-950 border border-emerald-200">
-            <div>Tracking ID: SKY-DRONE-88192</div>
-            <div>Estimated Arrival: Within 45 minutes</div>
+            <div>Waybill: {droneOrder?.waybillId || 'EXPRESS-REFILL'}</div>
+            <div>ETA: {telemetry ? `${telemetry.etaMinutes} minutes` : 'Preparing route'}</div>
             <div>Delivery Zone: Robert C. (Residential Pad)</div>
           </div>
+          {telemetry && (
+            <div className="rounded-xl border border-emerald-200 bg-white/80 p-3 text-left text-xs text-emerald-950 space-y-2">
+              <div className="flex justify-between font-semibold"><span>Live flight telemetry</span><span>{telemetry.progress}%</span></div>
+              <div className="h-2 overflow-hidden rounded-full bg-emerald-100"><div className="h-full bg-secondary transition-all" style={{ width: `${telemetry.progress}%` }} /></div>
+              <div className="grid grid-cols-2 gap-2 font-mono text-[10px]"><span>Altitude: {telemetry.altitudeM}m</span><span>Speed: {telemetry.airspeedKph} km/h</span><span>Temp: {telemetry.temperatureC}°C</span><span>Humidity: {telemetry.humidityPercent}%</span></div>
+              <div className="h-12 rounded bg-slate-950 px-2 pt-1 flex items-end gap-1">{[5.2, 5.5, 4.8, telemetry.temperatureC, 5.1, 4.9].map((value, index) => <span key={index} className="flex-1 bg-brand-accent-cyan/80" style={{ height: `${Math.max(15, value * 15)}%` }} />)}</div>
+              <p className="text-[10px]">Cold-chain target: 2°C–8°C · monitored continuously</p>
+            </div>
+          )}
+          {telemetry?.status === 'delivered' && <button onClick={() => void downloadReceipt()} className="w-full rounded-xl border border-emerald-300 bg-white py-2 text-xs font-semibold text-emerald-900">{receiptId ? `${receiptId} · CoA verified` : 'Download receipt & verified CoA'}</button>}
         </div>
       ) : items.length === 0 ? (
         <div className="bg-surface-card p-8 rounded-xl border border-border-crisp text-center space-y-2">
@@ -110,7 +177,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({
                   <span className="material-symbols-outlined text-[16px]">mode_fan</span>
                   SkyRoute Drone
                 </span>
-                <span className="text-[10px]">Under 45 mins • $2.50</span>
+                <span className="text-[10px]">8.4 km • Under 45 mins • $3.69</span>
               </button>
 
               <button
@@ -123,7 +190,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({
               >
                 <span className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-[16px]">local_shipping</span>
-                  Courier Courier
+                  Express Courier
                 </span>
                 <span className="text-[10px]">Tomorrow morning • Free</span>
               </button>
@@ -156,6 +223,7 @@ export const CartScreen: React.FC<CartScreenProps> = ({
               <span className="material-symbols-outlined text-[18px]">verified</span>
               Confirm & Dispatch Refill (${total.toFixed(2)})
             </button>
+            {dispatchError && <p className="pt-2 text-center text-xs text-status-critical">{dispatchError}</p>}
           </div>
         </div>
       )}

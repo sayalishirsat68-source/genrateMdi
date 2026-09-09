@@ -9,6 +9,7 @@ import {
 import { VaultSegment, RxFilter, Prescription } from '../types';
 
 interface RxVaultScreenProps {
+  prescriptions?: Prescription[];
   onOpenQr: () => void;
   onOpenScan: () => void;
   onOpenPdf: (filename?: string) => void;
@@ -20,6 +21,7 @@ interface RxVaultScreenProps {
 }
 
 export const RxVaultScreen: React.FC<RxVaultScreenProps> = ({
+  prescriptions: propPrescriptions,
   onOpenQr,
   onOpenScan,
   onOpenPdf,
@@ -31,16 +33,19 @@ export const RxVaultScreen: React.FC<RxVaultScreenProps> = ({
 }) => {
   const [activeSegment, setActiveSegment] = useState<VaultSegment>('prescriptions');
   const [activeFilter, setActiveFilter] = useState<RxFilter>('all');
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>(INITIAL_PRESCRIPTIONS);
+  const [localPrescriptions] = useState<Prescription[]>(INITIAL_PRESCRIPTIONS);
   const [refillState, setRefillState] = useState<{ [key: string]: 'idle' | 'queuing' | 'scheduled' }>({});
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [sortBy, setSortBy] = useState<'default' | 'urgency' | 'price'>('default');
+
+  const basePrescriptions = propPrescriptions || localPrescriptions;
 
   // One-tap refill handler matching the user's interactive script
   const handleRefill = (rxId: string) => {
     setRefillState((prev) => ({ ...prev, [rxId]: 'queuing' }));
     setTimeout(() => {
       setRefillState((prev) => ({ ...prev, [rxId]: 'scheduled' }));
-      const rx = prescriptions.find((p) => p.id === rxId);
+      const rx = basePrescriptions.find((p) => p.id === rxId);
       if (rx) {
         onAddToCart(rx);
       }
@@ -50,13 +55,28 @@ export const RxVaultScreen: React.FC<RxVaultScreenProps> = ({
     }, 900);
   };
 
-  // Filter prescriptions based on chips
-  const filteredPrescriptions = prescriptions.filter((rx) => {
+  // Sort and filter prescriptions based on chips and sort order
+  const sortedPrescriptions = [...basePrescriptions].sort((a, b) => {
+    if (sortBy === 'urgency') return (a.daysLeft || 99) - (b.daysLeft || 99);
+    if (sortBy === 'price') return a.directGenericPrice - b.directGenericPrice;
+    return 0;
+  });
+
+  const filteredPrescriptions = sortedPrescriptions.filter((rx) => {
     if (activeFilter === 'needs-refill') return rx.status === 'critical';
     if (activeFilter === 'chronic') return rx.status === 'active';
     if (activeFilter === 'archived') return rx.status === 'completed';
     return true;
   });
+
+  const criticalCount = basePrescriptions.filter((p) => p.status === 'critical').length;
+  const chronicCount = basePrescriptions.filter((p) => p.status === 'active').length;
+  const archivedCount = basePrescriptions.filter((p) => p.status === 'completed').length;
+  const activeCount = basePrescriptions.filter((p) => p.status !== 'completed').length;
+  const minDaysLeft = basePrescriptions
+    .filter((p) => p.status === 'critical' && p.daysLeft !== undefined)
+    .map((p) => p.daysLeft as number)
+    .reduce((min, cur) => (cur < min ? cur : min), 4);
 
   const exportHistoryPDF = () => {
     onOpenPdf('Clinical_Rx_History_RobertC_Sept2026.pdf');
@@ -113,7 +133,7 @@ export const RxVaultScreen: React.FC<RxVaultScreenProps> = ({
             className="bg-surface-canvas hover:bg-surface-subtle p-space-xs rounded-xl flex flex-col items-center text-center transition-colors border border-border-crisp/60"
           >
             <span className="font-semibold text-headline-sm text-on-surface leading-tight">
-              {PATIENT_DATA.stats.activeRx}
+              {activeCount}
             </span>
             <span className="text-label-sm text-on-surface-variant mt-0.5">Active Rx</span>
           </button>
@@ -145,7 +165,7 @@ export const RxVaultScreen: React.FC<RxVaultScreenProps> = ({
             className="bg-status-pending-bg hover:bg-amber-100 p-space-xs rounded-xl flex flex-col items-center text-center transition-colors border border-status-pending-border"
           >
             <span className="font-semibold text-headline-sm text-status-pending leading-tight">
-              {PATIENT_DATA.stats.refillDueDays}d
+              {minDaysLeft}d
             </span>
             <span className="text-label-sm text-status-pending font-medium mt-0.5">
               Refill Due
@@ -181,7 +201,7 @@ export const RxVaultScreen: React.FC<RxVaultScreenProps> = ({
                 : 'bg-surface-subtle text-on-surface-variant hover:text-on-surface'
             }`}
           >
-            Prescriptions & Refills ({prescriptions.length})
+            Prescriptions & Refills ({basePrescriptions.length})
           </button>
           <button
             onClick={() => setActiveSegment('vitals')}
@@ -211,7 +231,7 @@ export const RxVaultScreen: React.FC<RxVaultScreenProps> = ({
                 : 'bg-surface-subtle text-on-surface-variant hover:text-on-surface'
             }`}
           >
-            Documents & CoAs
+            Documents & CoAs ({DOCUMENTS.length})
           </button>
         </div>
       </section>
@@ -230,7 +250,7 @@ export const RxVaultScreen: React.FC<RxVaultScreenProps> = ({
                     : 'bg-surface-card text-on-surface-variant hover:text-on-surface shadow-sm'
                 }`}
               >
-                All ({prescriptions.length})
+                All ({basePrescriptions.length})
               </button>
               <button
                 onClick={() => setActiveFilter('needs-refill')}
@@ -240,7 +260,7 @@ export const RxVaultScreen: React.FC<RxVaultScreenProps> = ({
                     : 'bg-status-critical-bg text-status-critical border border-status-critical-border'
                 }`}
               >
-                Needs Refill (1)
+                Needs Refill ({criticalCount})
               </button>
               <button
                 onClick={() => setActiveFilter('chronic')}
@@ -250,7 +270,7 @@ export const RxVaultScreen: React.FC<RxVaultScreenProps> = ({
                     : 'bg-surface-card text-on-surface-variant hover:text-on-surface shadow-sm'
                 }`}
               >
-                Chronic Care (2)
+                Chronic Care ({chronicCount})
               </button>
               <button
                 onClick={() => setActiveFilter('archived')}
@@ -260,7 +280,7 @@ export const RxVaultScreen: React.FC<RxVaultScreenProps> = ({
                     : 'bg-surface-card text-on-surface-variant hover:text-on-surface shadow-sm'
                 }`}
               >
-                Archived (1)
+                Archived ({archivedCount})
               </button>
             </div>
             <button
@@ -279,23 +299,36 @@ export const RxVaultScreen: React.FC<RxVaultScreenProps> = ({
               <div className="flex gap-1.5">
                 <button
                   onClick={() => {
-                    const sorted = [...prescriptions].sort((a, b) => (a.daysLeft || 99) - (b.daysLeft || 99));
-                    setPrescriptions(sorted);
+                    setSortBy('urgency');
                     setShowSortMenu(false);
                   }}
-                  className="px-2 py-1 bg-surface-subtle hover:bg-border-crisp rounded text-on-surface font-medium"
+                  className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                    sortBy === 'urgency' ? 'bg-secondary text-white' : 'bg-surface-subtle hover:bg-border-crisp text-on-surface'
+                  }`}
                 >
                   Refill Urgency
                 </button>
                 <button
                   onClick={() => {
-                    const sorted = [...prescriptions].sort((a, b) => a.directGenericPrice - b.directGenericPrice);
-                    setPrescriptions(sorted);
+                    setSortBy('price');
                     setShowSortMenu(false);
                   }}
-                  className="px-2 py-1 bg-surface-subtle hover:bg-border-crisp rounded text-on-surface font-medium"
+                  className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                    sortBy === 'price' ? 'bg-secondary text-white' : 'bg-surface-subtle hover:bg-border-crisp text-on-surface'
+                  }`}
                 >
                   Price: Low to High
+                </button>
+                <button
+                  onClick={() => {
+                    setSortBy('default');
+                    setShowSortMenu(false);
+                  }}
+                  className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                    sortBy === 'default' ? 'bg-secondary text-white' : 'bg-surface-subtle hover:bg-border-crisp text-on-surface'
+                  }`}
+                >
+                  Default
                 </button>
               </div>
             </div>
@@ -303,266 +336,255 @@ export const RxVaultScreen: React.FC<RxVaultScreenProps> = ({
 
           {/* Main Prescription Cards Stream */}
           <div className="px-space-md flex flex-col gap-space-md mt-space-xs">
-            {/* Card 1: Urgent Refill Due (Atorvastatin) */}
-            {filteredPrescriptions.some((p) => p.id === 'rx-1') && (
-              <article className="bg-surface-card rounded-xl p-space-md shadow-sm relative overflow-hidden border border-border-crisp">
-                <div className="flex items-start justify-between gap-space-xs">
-                  <div className="flex items-center gap-space-xs">
-                    <span className="w-2.5 h-2.5 rounded-full bg-status-critical animate-pulse"></span>
-                    <span className="font-semibold text-label-sm text-status-critical uppercase tracking-wide">
-                      Refill Critical • 4 Days Left
+            {filteredPrescriptions.length === 0 ? (
+              <div className="bg-surface-card p-8 rounded-xl border border-border-crisp text-center space-y-2">
+                <span className="material-symbols-outlined text-4xl text-on-surface-variant/40">
+                  medication
+                </span>
+                <h4 className="font-semibold text-sm text-on-surface">No Prescriptions in this Category</h4>
+                <p className="text-xs text-on-surface-variant">
+                  {activeFilter === 'needs-refill'
+                    ? 'All your current prescriptions are well-stocked.'
+                    : 'Switch back to "All" or upload a new prescription.'}
+                </p>
+                <button
+                  onClick={() => setActiveFilter('all')}
+                  className="mt-2 px-3 py-1.5 bg-secondary text-white rounded-lg text-xs font-semibold"
+                >
+                  View All Prescriptions
+                </button>
+              </div>
+            ) : (
+              filteredPrescriptions.map((rx) => (
+                <article
+                  key={rx.id}
+                  className={`bg-surface-card rounded-xl p-space-md shadow-sm relative overflow-hidden border ${
+                    rx.status === 'critical'
+                      ? 'border-status-critical-border'
+                      : 'border-border-crisp'
+                  }`}
+                >
+                  {/* Status header banner */}
+                  <div className="flex items-start justify-between gap-space-xs">
+                    <div className="flex items-center gap-space-xs">
+                      <span
+                        className={`w-2.5 h-2.5 rounded-full ${
+                          rx.status === 'critical'
+                            ? 'bg-status-critical animate-pulse'
+                            : rx.status === 'active'
+                            ? 'bg-status-verified'
+                            : 'bg-on-surface-variant/40'
+                        }`}
+                      ></span>
+                      <span
+                        className={`font-semibold text-label-sm uppercase tracking-wide ${
+                          rx.status === 'critical'
+                            ? 'text-status-critical'
+                            : rx.status === 'active'
+                            ? 'text-status-verified'
+                            : 'text-on-surface-variant'
+                        }`}
+                      >
+                        {rx.statusLabel}
+                      </span>
+                    </div>
+                    <span className="font-mono text-code-xs bg-surface-subtle text-on-surface-variant px-space-xs py-space-2xs rounded">
+                      {rx.remainingInfo}
                     </span>
                   </div>
-                  <span className="font-mono text-code-xs bg-surface-subtle text-on-surface-variant px-space-xs py-space-2xs rounded">
-                    6 tabs remaining
-                  </span>
-                </div>
 
-                <div className="flex gap-space-sm mt-space-sm">
-                  <div className="w-14 h-14 rounded-lg bg-surface-subtle overflow-hidden flex-shrink-0 border border-border-crisp/60">
-                    <img
-                      className="w-full h-full object-cover"
-                      alt="Cipla Atorvastatin packaging"
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuCRmNPzxvAOf-ICs0uzW93ZPP9ufATlx9NnwHl_EWyJDA-nYIPE1CRIBOoWYOtrPAGBxfW2PGf4yBY7o9Rv0CIk53E9lHbHUCbqkdfApGAH-dRoKByyRh1MV0lQwF3xj9Jujzd-PGuN3dPhuSwVo0PaR_aQDbeU05tQlEUAraQAXnTDOTdi8WhdaHzRjM0QyB5JzyH07kOwe7fsbklzThuVjql7-hl0FXGCo5DjKOPv8hTq3H-nsjA8"
-                    />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h2 className="font-semibold text-headline-sm text-on-surface leading-tight">
-                      Atorvastatin Calcium
-                    </h2>
-                    <p className="text-body-sm text-on-surface-variant mt-0.5">
-                      20mg Film-coated tab • Cipla Pharma
-                    </p>
-                    <div className="flex items-center gap-space-xs mt-1.5 flex-wrap">
-                      <button
-                        onClick={onOpenAUC}
-                        className="inline-flex items-center gap-1 px-space-xs py-0.5 rounded bg-status-verified-bg text-status-verified font-semibold text-label-sm hover:bg-emerald-100 transition-colors"
-                      >
-                        <span className="material-symbols-outlined text-[14px]">biotech</span>
-                        99.4% AUC Match to Lipitor
-                      </button>
+                  {/* Main Pill info & image */}
+                  <div className="flex gap-space-sm mt-space-sm">
+                    <div className="w-14 h-14 rounded-lg bg-surface-subtle overflow-hidden flex-shrink-0 border border-border-crisp/60">
+                      <img
+                        className="w-full h-full object-cover"
+                        alt={rx.imageAlt || rx.name}
+                        src={rx.imageUrl}
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = 'none';
+                        }}
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h2 className="font-semibold text-headline-sm text-on-surface leading-tight">
+                        {rx.name}
+                      </h2>
+                      <p className="text-body-sm text-on-surface-variant mt-0.5">
+                        {rx.dosage}
+                      </p>
+                      {rx.aucMatch && (
+                        <div className="flex items-center gap-space-xs mt-1.5 flex-wrap">
+                          <button
+                            onClick={onOpenAUC}
+                            className="inline-flex items-center gap-1 px-space-xs py-0.5 rounded bg-status-verified-bg text-status-verified font-semibold text-label-sm hover:bg-emerald-100 transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">biotech</span>
+                            {rx.aucMatch}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
 
-                {/* Prescription Metadata Strip */}
-                <div
-                  onClick={() => onOpenPdf('Dr_Verma_Cardio_Sept2026.pdf')}
-                  className="mt-space-sm p-space-xs bg-surface-canvas rounded-lg flex items-center justify-between gap-space-xs cursor-pointer hover:bg-surface-subtle transition-colors border border-border-crisp/40"
-                >
-                  <div className="flex items-center gap-space-xs min-w-0">
-                    <span className="material-symbols-outlined text-[16px] text-secondary">
-                      description
-                    </span>
-                    <span className="font-mono text-code-xs text-on-surface truncate">
-                      Dr_Verma_Cardio_Sept2026.pdf
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-space-2xs flex-shrink-0">
-                    <span className="text-label-sm text-status-verified font-medium">
-                      99.1% OCR Match
-                    </span>
-                    <span className="material-symbols-outlined text-[14px] text-status-verified">
-                      verified
-                    </span>
-                  </div>
-                </div>
+                  {/* PDF & OCR verification strip if present */}
+                  {rx.pdfFile && (
+                    <div
+                      onClick={() => onOpenPdf(rx.pdfFile)}
+                      className="mt-space-sm p-space-xs bg-surface-canvas rounded-lg flex items-center justify-between gap-space-xs cursor-pointer hover:bg-surface-subtle transition-colors border border-border-crisp/40"
+                    >
+                      <div className="flex items-center gap-space-xs min-w-0">
+                        <span className="material-symbols-outlined text-[16px] text-secondary">
+                          description
+                        </span>
+                        <span className="font-mono text-code-xs text-on-surface truncate">
+                          {rx.pdfFile}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-space-2xs flex-shrink-0">
+                        <span className="text-label-sm text-status-verified font-medium">
+                          {rx.ocrMatch || '99.1% OCR Match'}
+                        </span>
+                        <span className="material-symbols-outlined text-[14px] text-status-verified">
+                          verified
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
-                {/* Doctor & Schedule */}
-                <div className="mt-space-xs flex items-center justify-between text-body-sm text-on-surface-variant">
-                  <span className="flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[14px]">person</span>
-                    Dr. A. K. Verma (Cardiologist)
-                  </span>
-                  <span className="flex items-center gap-1 text-on-surface font-medium">
-                    <span className="material-symbols-outlined text-[14px] text-secondary">
-                      bedtime
+                  {/* Doctor & Schedule */}
+                  <div className="mt-space-xs flex items-center justify-between text-body-sm text-on-surface-variant flex-wrap gap-1">
+                    <span className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[14px]">person</span>
+                      {rx.doctor} {rx.doctorSpecialty ? `(${rx.doctorSpecialty})` : ''}
                     </span>
-                    1 Tab at Bedtime
-                  </span>
-                </div>
-
-                {/* Refill CTA Block */}
-                <div className="mt-space-md pt-space-sm bg-surface-subtle -mx-space-md -mb-space-md px-space-md pb-space-sm flex items-center justify-between gap-space-sm border-t border-border-crisp">
-                  <div>
-                    <span className="text-label-sm text-on-surface-variant block font-medium">
-                      Direct Generic Price
-                    </span>
-                    <span className="text-headline-sm text-on-surface leading-none font-bold">
-                      $4.20{' '}
-                      <span className="text-body-sm line-through text-on-surface-variant/60 font-normal">
-                        $48.00
+                    <span className="flex items-center gap-1 text-on-surface font-medium">
+                      <span className="material-symbols-outlined text-[14px] text-secondary">
+                        schedule
                       </span>
+                      {rx.instructions}
                     </span>
                   </div>
-                  <div className="flex items-center gap-space-xs">
-                    <button
-                      onClick={onOpenScan}
-                      className="px-space-sm py-2 rounded-lg bg-surface-card hover:bg-surface-canvas text-on-surface font-semibold text-label-md flex items-center gap-1 shadow-sm transition-colors border border-border-crisp"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">visibility</span>
-                      Scan
-                    </button>
-                    <button
-                      onClick={() => handleRefill('rx-1')}
-                      disabled={refillState['rx-1'] === 'queuing'}
-                      className={`px-space-md py-2 rounded-lg font-semibold text-label-md flex items-center gap-1 shadow-sm transition-transform active:scale-95 ${
-                        refillState['rx-1'] === 'scheduled'
-                          ? 'bg-status-verified text-on-secondary'
-                          : 'bg-secondary hover:bg-secondary/90 text-on-secondary'
-                      }`}
-                    >
-                      {refillState['rx-1'] === 'queuing' ? (
-                        <>
-                          <span className="material-symbols-outlined text-[16px] animate-spin">
-                            progress_activity
-                          </span>
-                          Queuing...
-                        </>
-                      ) : refillState['rx-1'] === 'scheduled' ? (
-                        <>
-                          <span className="material-symbols-outlined text-[16px]">
-                            check_circle
-                          </span>
-                          Scheduled!
-                        </>
-                      ) : (
-                        <>
-                          <span className="material-symbols-outlined text-[16px]">
-                            shopping_cart_checkout
-                          </span>
-                          Refill Now
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </article>
-            )}
 
-            {/* Card 2: Active Ongoing Chronic Therapy (Metformin ER) */}
-            {filteredPrescriptions.some((p) => p.id === 'rx-2') && (
-              <article className="bg-surface-card rounded-xl p-space-md shadow-sm border border-border-crisp">
-                <div className="flex items-start justify-between gap-space-xs">
-                  <div className="flex items-center gap-space-xs">
-                    <span className="w-2.5 h-2.5 rounded-full bg-status-verified"></span>
-                    <span className="font-semibold text-label-sm text-status-verified uppercase tracking-wide">
-                      Active Chronic Therapy
-                    </span>
-                  </div>
-                  <span className="font-mono text-code-xs bg-surface-subtle text-on-surface-variant px-space-xs py-space-2xs rounded">
-                    44 tabs • 22 days left
-                  </span>
-                </div>
+                  {/* Clinical note if present */}
+                  {rx.clinicalNote && (
+                    <div className="mt-space-sm p-space-xs bg-status-verified-bg/50 rounded-lg flex items-start gap-space-xs border border-status-verified-border/60">
+                      <span className="material-symbols-outlined text-[16px] text-status-verified mt-0.5">
+                        health_and_safety
+                      </span>
+                      <p className="text-body-sm text-on-surface leading-tight">
+                        {rx.clinicalNote}
+                      </p>
+                    </div>
+                  )}
 
-                <div className="flex gap-space-sm mt-space-sm">
-                  <div className="w-14 h-14 rounded-lg bg-surface-subtle overflow-hidden flex-shrink-0 border border-border-crisp/60">
-                    <img
-                      className="w-full h-full object-cover"
-                      alt="Metformin HCl 500mg ER packaging"
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuAcWWvBdtc7H__C1mG9XvtAsFAc2mqO0yDvViIL37GjbN95o-fEiPXvhWo-CYO3q7BMZGe6vPPOSI4SIn9yfCtcfF0AAYDN56NcOVcvDKZ4tF1Rswvqez13Unymi9dAcSqsAKt4Ug7odhi58Kz_dFBcJaPgWkf35X2W9IQB6JSuBRuxF6gr2RG4ZJ7qwgPdhcve9rt8KFLqsOFCAIpi1RRN0ZmSHgcLZ9HmsyvqpH6BKQQ5B-vqjW5a"
-                    />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h2 className="font-semibold text-headline-sm text-on-surface leading-tight">
-                      Metformin HCl 500mg ER
-                    </h2>
-                    <p className="text-body-sm text-on-surface-variant mt-0.5">
-                      Glucophage Equivalent • Zydus Cadila
-                    </p>
-                    <p
-                      onClick={() => onOpenPdf('Dr_Mahapatra_InternalMed_Aug2026.pdf')}
-                      className="font-mono text-code-xs text-secondary mt-1 hover:underline cursor-pointer"
-                    >
-                      Rx: Dr_Mahapatra_InternalMed_Aug2026.pdf
-                    </p>
-                  </div>
-                </div>
-
-                {/* Clinical Advisory Tag */}
-                <div className="mt-space-sm p-space-xs bg-status-verified-bg/50 rounded-lg flex items-start gap-space-xs border border-status-verified-border/60">
-                  <span className="material-symbols-outlined text-[16px] text-status-verified mt-0.5">
-                    health_and_safety
-                  </span>
-                  <p className="text-body-sm text-on-surface leading-tight">
-                    <span className="font-semibold text-status-verified">Clearance OK:</span> eGFR 74 normal, annual renal panel validated.
-                  </p>
-                </div>
-
-                <div className="mt-space-sm flex items-center justify-between pt-space-xs">
-                  <div className="flex items-center gap-space-xs text-body-sm text-on-surface-variant">
-                    <span className="material-symbols-outlined text-[16px] text-on-surface-variant">
-                      autorenew
-                    </span>
-                    <span>Auto-ship scheduled Oct 18</span>
-                  </div>
-                  <button
-                    onClick={onOpenDosageGuide}
-                    className="font-semibold text-label-md text-secondary hover:underline flex items-center gap-0.5"
-                  >
-                    Dosage Guide
-                    <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
-                  </button>
-                </div>
-              </article>
-            )}
-
-            {/* Card 3: Completed Acute Course (Moxikind) */}
-            {filteredPrescriptions.some((p) => p.id === 'rx-3') && (
-              <article className="bg-surface-card/90 rounded-xl p-space-md shadow-sm border border-border-crisp">
-                <div className="flex items-start justify-between gap-space-xs">
-                  <div className="flex items-center gap-space-xs">
-                    <span className="w-2.5 h-2.5 rounded-full bg-on-surface-variant/40"></span>
-                    <span className="font-medium text-label-sm text-on-surface-variant uppercase tracking-wide">
-                      Course Finished • 10-Day Acute
-                    </span>
-                  </div>
-                  <span className="font-mono text-code-xs bg-surface-subtle text-on-surface-variant px-space-xs py-space-2xs rounded">
-                    Sept 2026
-                  </span>
-                </div>
-
-                <div className="flex gap-space-sm mt-space-sm">
-                  <div className="w-14 h-14 rounded-lg bg-surface-subtle overflow-hidden flex-shrink-0 opacity-90 border border-border-crisp/60">
-                    <img
-                      className="w-full h-full object-cover"
-                      alt="Moxikind-CV 625mg packaging"
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqPJBtQkLjvuKtGIeECu-XirAZMUqUPmt4OFITusBNIUGjvqbXSjb7v--gQnlwd0JZr1XqYwcXSe0HRHKjXlfQcmmpMPayoIcKovoI5y_zIQKJQSYUjiLOsdiZTFTcHHx_k53JnnVRtxfzs1yRZudfyvfdlXRpJWPqEAsrQkEElCBbB0_URh04IdLi7_yzUdoZmNFa4-soEsVZCBwqlAk-QgqKe_PAvi2tS0EQ_pGg975V_9mp8Mg-"
-                    />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h2 className="font-semibold text-headline-sm text-on-surface leading-tight">
-                      Moxikind-CV 625mg
-                    </h2>
-                    <p className="text-body-sm text-on-surface-variant mt-0.5">
-                      Amoxicillin + Clavulanic Acid • Mankind
-                    </p>
-                    <p className="text-body-sm text-on-surface-variant/80 mt-1 flex items-center gap-1">
+                  {/* Delivery method note if present */}
+                  {rx.deliveryMethod && (
+                    <p className="text-body-sm text-on-surface-variant/80 mt-2 flex items-center gap-1">
                       <span className="material-symbols-outlined text-[14px] text-secondary">
                         local_shipping
                       </span>
-                      Delivered via SkyRoute Drone #ORD-99411
+                      {rx.deliveryMethod}
                     </p>
-                  </div>
-                </div>
+                  )}
 
-                <div className="mt-space-sm flex items-center justify-between pt-space-xs bg-surface-subtle p-space-xs rounded-lg">
-                  <div className="flex items-center gap-space-xs">
-                    <span className="material-symbols-outlined text-[16px] text-secondary">
-                      workspace_premium
-                    </span>
-                    <span className="font-mono text-code-xs text-on-surface font-medium truncate max-w-[200px]">
-                      Batch #AUG-27K Certificate of Analysis (CoA)
-                    </span>
-                  </div>
-                  <button
-                    onClick={onOpenCoA}
-                    className="text-secondary font-semibold text-label-sm hover:underline flex items-center gap-0.5 flex-shrink-0"
-                  >
-                    View CoA
-                  </button>
-                </div>
-              </article>
+                  {/* Certificate of analysis strip if available */}
+                  {rx.coaAvailable && (
+                    <div className="mt-space-sm flex items-center justify-between pt-space-xs bg-surface-subtle p-space-xs rounded-lg">
+                      <div className="flex items-center gap-space-xs min-w-0">
+                        <span className="material-symbols-outlined text-[16px] text-secondary">
+                          workspace_premium
+                        </span>
+                        <span className="font-mono text-code-xs text-on-surface font-medium truncate max-w-[200px]">
+                          {rx.batchNumber || 'Batch Certificate of Analysis (CoA)'}
+                        </span>
+                      </div>
+                      <button
+                        onClick={onOpenCoA}
+                        className="text-secondary font-semibold text-label-sm hover:underline flex items-center gap-0.5 flex-shrink-0"
+                      >
+                        View CoA
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Auto-ship & Dosage guide row if active */}
+                  {rx.status === 'active' && (
+                    <div className="mt-space-sm flex items-center justify-between pt-space-xs">
+                      <div className="flex items-center gap-space-xs text-body-sm text-on-surface-variant">
+                        <span className="material-symbols-outlined text-[16px] text-on-surface-variant">
+                          autorenew
+                        </span>
+                        <span>{rx.autoShipDate || 'Auto-refill enrolled'}</span>
+                      </div>
+                      <button
+                        onClick={onOpenDosageGuide}
+                        className="font-semibold text-label-md text-secondary hover:underline flex items-center gap-0.5"
+                      >
+                        Dosage Guide
+                        <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Refill CTA Block */}
+                  {rx.status !== 'completed' && (
+                    <div className="mt-space-md pt-space-sm bg-surface-subtle -mx-space-md -mb-space-md px-space-md pb-space-sm flex items-center justify-between gap-space-sm border-t border-border-crisp">
+                      <div>
+                        <span className="text-label-sm text-on-surface-variant block font-medium">
+                          Direct Generic Price
+                        </span>
+                        <span className="text-headline-sm text-on-surface leading-none font-bold">
+                          ${rx.directGenericPrice.toFixed(2)}{' '}
+                          <span className="text-body-sm line-through text-on-surface-variant/60 font-normal">
+                            ${rx.innovatorPrice.toFixed(2)}
+                          </span>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-space-xs">
+                        <button
+                          onClick={onOpenScan}
+                          className="px-space-sm py-2 rounded-lg bg-surface-card hover:bg-surface-canvas text-on-surface font-semibold text-label-md flex items-center gap-1 shadow-sm transition-colors border border-border-crisp"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">visibility</span>
+                          Scan
+                        </button>
+                        <button
+                          onClick={() => handleRefill(rx.id)}
+                          disabled={refillState[rx.id] === 'queuing'}
+                          className={`px-space-md py-2 rounded-lg font-semibold text-label-md flex items-center gap-1 shadow-sm transition-transform active:scale-95 ${
+                            refillState[rx.id] === 'scheduled'
+                              ? 'bg-status-verified text-on-secondary'
+                              : 'bg-secondary hover:bg-secondary/90 text-on-secondary'
+                          }`}
+                        >
+                          {refillState[rx.id] === 'queuing' ? (
+                            <>
+                              <span className="material-symbols-outlined text-[16px] animate-spin">
+                                progress_activity
+                              </span>
+                              Queuing...
+                            </>
+                          ) : refillState[rx.id] === 'scheduled' ? (
+                            <>
+                              <span className="material-symbols-outlined text-[16px]">
+                                check_circle
+                              </span>
+                              Scheduled!
+                            </>
+                          ) : (
+                            <>
+                              <span className="material-symbols-outlined text-[16px]">
+                                shopping_cart_checkout
+                              </span>
+                              Refill Now
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </article>
+              ))
             )}
           </div>
 

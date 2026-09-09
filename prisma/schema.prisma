@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Patient {
+  id            String         @id
+  name          String
+  abhaId        String         @unique
+  prescriptions Prescription[]
+  vitals        VitalMetric[]
+  documents     ClinicalDocument[]
+  orders        Order[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Doctor {
+  id            String         @id
+  name          String
+  specialty     String
+  licenseNumber String         @unique
+  prescriptions Prescription[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Prescription {
+  id                  String   @id
+  patientId           String
+  doctorId            String?
+  name                String
+  dosage              String
+  manufacturer        String
+  brandEquivalent     String
+  status              String
+  statusLabel         String
+  remainingInfo       String
+  daysLeft            Int?
+  instructions        String
+  directGenericPrice  Decimal  @db.Decimal(10, 2)
+  innovatorPrice      Decimal  @db.Decimal(10, 2)
+  patient             Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor              Doctor?  @relation(fields: [doctorId], references: [id])
+  orders              Order[]
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model VitalMetric {
+  id        String   @id @default(cuid())
+  patientId String
+  title     String
+  value     Float
+  unit      String
+  measuredAt DateTime @default(now())
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+model ClinicalDocument {
+  id        String   @id
+  patientId String
+  title     String
+  type      String
+  hash      String
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+model Order {
+  id             String       @id @default(cuid())
+  patientId      String
+  prescriptionId String
+  status         String       @default("queued")
+  deliveryMethod String
+  patient        Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id])
+  createdAt      DateTime     @default(now())
+}

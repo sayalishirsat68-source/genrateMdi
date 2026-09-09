@@ -1,0 +1,10 @@
+{
+  "name": "genraticMed Rx Vault",
+  "short_name": "Rx Vault",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f766e",
+  "description": "Offline-safe clinical prescription vault and bio-parity tracker.",
+  "icons": [{ "src": "/assets/rx-vault-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
