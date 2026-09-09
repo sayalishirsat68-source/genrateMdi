@@ -178,7 +178,7 @@ app.post('/api/v1/orders/drone-dispatch', (req: Request, res: Response) => {
     ? req.body.prescriptionIds.filter((id: unknown): id is string => typeof id === 'string')
     : [];
   const distanceKm = Number(req.body.distanceKm);
-  if (prescriptionIds.length === 0 || prescriptionIds.some((id) => !prescriptions.some((prescription) => prescription.id === id))) {
+  if (prescriptionIds.length === 0 || prescriptionIds.some((id: string) => !prescriptions.some((prescription) => prescription.id === id))) {
     res.status(400).json({ success: false, error: 'Dispatch requires one or more valid prescription IDs.' });
     return;
   }
